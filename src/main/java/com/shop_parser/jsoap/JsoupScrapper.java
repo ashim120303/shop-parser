@@ -38,7 +38,10 @@ public class JsoupScrapper {
         try {
             Document doc = Jsoup.connect(productUrl).get();
             String name = doc.select("h1[itemprop=name]").text();
-            String price = doc.select(".itm-price-amount").text();
+
+            // Изменение: получение цены из атрибута data-price
+            String price = doc.select("li.j_price").attr("data-price");
+
             String article = doc.select("meta[itemprop=sku]").attr("content");
 
             // Извлечение характеристик
@@ -52,6 +55,7 @@ public class JsoupScrapper {
 
             // Сохранение данных в базу данных
             int productId = saveProductToDatabase(name, price, article, size, material, weight, packaging, packagingWeight, packagingVolume, quantityPerPack); // Обновлено
+            System.out.println("Attempting to save product: " + name + ", Price: " + price);
 
             // Скачивание и сохранение изображений
             saveProductImages(doc, productId);
@@ -62,6 +66,7 @@ public class JsoupScrapper {
             e.printStackTrace();
         }
     }
+
 
 
     private String extractFeature(Document doc, String featureName) {

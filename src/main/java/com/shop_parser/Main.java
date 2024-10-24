@@ -15,7 +15,7 @@ public class Main {
 
 	public static void main(String[] args) {
 //		SeleniumScrapper seleniumScrapper = new SeleniumScrapper();
-		String productUrl = "https://gifts.ru/id/169385"; // URL страницы для парсинга
+		String productUrl = "https://gifts.ru/id/135551"; // URL страницы для парсинга
 
 		try {
 			JsoupScrapper scrapper = new JsoupScrapper();
