@@ -16,39 +16,41 @@ public class SeleniumScrapper {
     private static final String LINKS_FILE = "links.txt";
     private WebDriver driver;
     private WebDriverWait wait;
+    private BufferedWriter writer;
 
     public SeleniumScrapper() {
         System.setProperty("webdriver.chrome.driver", "/usr/local/bin/chromedriver");
         driver = new ChromeDriver();
         wait = new WebDriverWait(driver, Duration.ofSeconds(15));
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LINKS_FILE))) {
+        try {
+            writer = new BufferedWriter(new FileWriter(LINKS_FILE));
             driver.get(ROOT_URL);
             List<WebElement> mainCategories = driver.findElements(By.className("m-ctlg-root"));
 
             for (WebElement mainCategory : mainCategories) {
-                processMainCategory(writer, mainCategory);
+                processMainCategory(mainCategory);
             }
         } catch (IOException e) {
             System.err.println("Ошибка записи в файл: " + e.getMessage());
         } finally {
+            closeWriter();
             driver.quit();
         }
     }
 
-    private void processMainCategory(BufferedWriter writer, WebElement mainCategory) {
+    private void processMainCategory(WebElement mainCategory) {
         try {
             String mainCategoryText = mainCategory.getText();
-            writer.write("Категория: " + mainCategoryText + "\n");
             System.out.println("Категория: " + mainCategoryText + " сохранена!");
             clickElement(mainCategory);
-            parseCategoryLinks(writer);
+            parseCategoryLinks();
         } catch (IOException e) {
             System.err.println("Ошибка записи в файл: " + e.getMessage());
         }
     }
 
-    private void parseCategoryLinks(BufferedWriter writer) {
+    private void parseCategoryLinks() throws IOException {
         List<WebElement> categoryLinks = driver.findElements(By.className("ctlg-link"));
 
         for (int i = 0; i < categoryLinks.size(); i++) {
@@ -59,10 +61,11 @@ public class SeleniumScrapper {
 
                 if (driver.findElements(By.id("j_itemsList")).isEmpty()) {
                     writer.write(link + "\n");
+                    writer.flush(); // Сразу записать в файл
                     System.out.println("Сохранено: " + link);
                 } else {
                     System.out.println("Вложенный переход: " + link);
-                    parseNestedLinks(writer);
+                    parseNestedLinks();
                 }
 
                 driver.navigate().back(); // Возврат к предыдущей категории
@@ -79,7 +82,7 @@ public class SeleniumScrapper {
         }
     }
 
-    private void parseNestedLinks(BufferedWriter writer) {
+    private void parseNestedLinks() throws IOException {
         List<WebElement> nestedLinks = driver.findElements(By.className("ctlg-link"));
 
         for (int i = 0; i < nestedLinks.size(); i++) {
@@ -89,6 +92,7 @@ public class SeleniumScrapper {
                 String link = driver.getCurrentUrl();
 
                 writer.write(link + "\n");
+                writer.flush(); // Сразу записать в файл
                 System.out.println("Сохранено: " + link);
 
                 driver.navigate().back(); // Возврат к предыдущей категории
@@ -115,5 +119,15 @@ public class SeleniumScrapper {
 
     private void waitForElements(By by) {
         wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(by));
+    }
+
+    private void closeWriter() {
+        try {
+            if (writer != null) {
+                writer.close();
+            }
+        } catch (IOException e) {
+            System.err.println("Ошибка закрытия файла: " + e.getMessage());
+        }
     }
 }
