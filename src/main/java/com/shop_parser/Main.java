@@ -1,24 +1,26 @@
 package com.shop_parser;
 
-import com.shop_parser.jsoap.JsoupScrapper;
-import java.io.IOException;
-import java.sql.SQLException;
+import com.shop_parser.selenium.SeleniumScrapper;
+import io.github.bonigarcia.wdm.WebDriverManager;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
 
-// TODO Кол-во в мин.упаковке
 public class Main {
 
 	public static void main(String[] args) {
-//		SeleniumScrapper seleniumScrapper = new SeleniumScrapper();
-		String productUrl = "https://gifts.ru/id/227884"; // URL страницы для парсинга
+		SeleniumScrapper scrapper = new SeleniumScrapper();
 
-		try {
-			JsoupScrapper scrapper = new JsoupScrapper();
-			scrapper.parseAndSaveProduct(productUrl);
-			scrapper.close(); // Закрытие соединения после выполнения
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+
+
+//		String productUrl = "https://gifts.ru/id/227884"; // URL страницы для парсинга
+//		try {
+//			JsoupScrapper scrapper = new JsoupScrapper();
+//			scrapper.parseAndSaveProduct(productUrl);
+//			scrapper.close(); // Закрытие соединения после выполнения
+//		} catch (SQLException e) {
+//			e.printStackTrace();
+//		} catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
     }
 }
