@@ -52,9 +52,10 @@ public class JsoupScrapper {
             Float packagingWeight = parseFloat(extractFeature(doc, "Вес упаковки")); // Добавлено
             Float packagingVolume = parseFloat(extractFeature(doc, "Объем упаковки")); // Добавлено
             int quantityPerPack = parseQuantity(extractFeature(doc, "Количество в упаковке"));
+            int minQuantityPerPack = parseQuantity(extractFeature(doc, "Кол-во в мин.упаковке"));
 
             // Сохранение данных в базу данных
-            int productId = saveProductToDatabase(name, price, article, size, material, weight, packaging, packagingWeight, packagingVolume, quantityPerPack); // Обновлено
+            int productId = saveProductToDatabase(name, price, article, size, material, weight, packaging, packagingWeight, packagingVolume, quantityPerPack, minQuantityPerPack); // Обновлено
             System.out.println("Attempting to save product: " + name + ", Price: " + price);
 
             // Скачивание и сохранение изображений
@@ -88,8 +89,8 @@ public class JsoupScrapper {
     }
 
     private int saveProductToDatabase(String name, String price, String article, String size, String material, Float weight,
-                                      String packaging, Float packagingWeight, Float packagingVolume, int quantityPerPack) {
-        String insertProductSQL = "INSERT INTO product (name, price, article, size, material, weight, packaging, packaging_weight, packaging_volume, quantity_per_pack, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"; // Убедитесь, что здесь 11 параметров
+                                      String packaging, Float packagingWeight, Float packagingVolume, int quantityPerPack, int minQuantityPerPack) { // Добавлено minQuantityPerPack
+        String insertProductSQL = "INSERT INTO product (name, price, article, size, material, weight, packaging, packaging_weight, packaging_volume, quantity_per_pack, min_quantity_per_pack, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement pstmt = connection.prepareStatement(insertProductSQL, PreparedStatement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, name);
             pstmt.setString(2, price);
@@ -101,8 +102,11 @@ public class JsoupScrapper {
             pstmt.setFloat(8, packagingWeight != null ? packagingWeight : 0.0f);
             pstmt.setFloat(9, packagingVolume != null ? packagingVolume : 0.0f);
             pstmt.setInt(10, quantityPerPack);
-            pstmt.setInt(11, 1); // category_id равен 1
+            pstmt.setInt(11, minQuantityPerPack); // Добавлено
+            pstmt.setInt(12, 1); // category_id равен 1
             pstmt.executeUpdate();
+
+            // Получение сгенерированного productId
             ResultSet generatedKeys = pstmt.getGeneratedKeys();
             if (generatedKeys.next()) {
                 return generatedKeys.getInt(1);
