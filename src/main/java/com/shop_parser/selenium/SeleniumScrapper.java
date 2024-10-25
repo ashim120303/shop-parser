@@ -30,8 +30,7 @@ public class SeleniumScrapper {
                 processMainCategory(writer, mainCategory);
             }
         } catch (IOException e) {
-            System.out.println("Ошибка записи в файл: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("Ошибка записи в файл: " + e.getMessage());
         } finally {
             driver.quit();
         }
@@ -39,33 +38,67 @@ public class SeleniumScrapper {
 
     private void processMainCategory(BufferedWriter writer, WebElement mainCategory) {
         try {
-            // Записываем категорию и переходим по ссылке
             String mainCategoryText = mainCategory.getText();
             writer.write("Категория: " + mainCategoryText + "\n");
             System.out.println("Категория: " + mainCategoryText + " сохранена!");
             clickElement(mainCategory);
-            parseCategoryLinks(writer); // Парсим ссылки внутри категории
+            parseCategoryLinks(writer);
         } catch (IOException e) {
-            System.out.println("Ошибка записи в файл: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("Ошибка записи в файл: " + e.getMessage());
         }
     }
 
     private void parseCategoryLinks(BufferedWriter writer) {
         List<WebElement> categoryLinks = driver.findElements(By.className("ctlg-link"));
 
-        for (WebElement categoryLink : categoryLinks) {
+        for (int i = 0; i < categoryLinks.size(); i++) {
             try {
-                clickElement(categoryLink); // Переход к ссылке
-                String link = driver.getCurrentUrl(); // Получаем URL
+                WebElement categoryLink = categoryLinks.get(i);
+                clickElement(categoryLink);
+                String link = driver.getCurrentUrl();
+
+                if (driver.findElements(By.id("j_itemsList")).isEmpty()) {
+                    writer.write(link + "\n");
+                    System.out.println("Сохранено: " + link);
+                } else {
+                    System.out.println("Вложенный переход: " + link);
+                    parseNestedLinks(writer);
+                }
+
+                driver.navigate().back(); // Возврат к предыдущей категории
+                waitForElements(By.className("ctlg-link")); // Ожидание загрузки элементов
+                categoryLinks = driver.findElements(By.className("ctlg-link")); // Обновление списка ссылок
+            } catch (StaleElementReferenceException e) {
+                System.out.println("Элемент устарел, пробую снова.");
+                i--; // Уменьшение счетчика для повторной обработки того же элемента
+            } catch (IOException e) {
+                System.err.println("Ошибка записи в файл: " + e.getMessage());
+            } catch (NoSuchElementException e) {
+                System.out.println("Элемент не найден: " + e.getMessage());
+            }
+        }
+    }
+
+    private void parseNestedLinks(BufferedWriter writer) {
+        List<WebElement> nestedLinks = driver.findElements(By.className("ctlg-link"));
+
+        for (int i = 0; i < nestedLinks.size(); i++) {
+            try {
+                WebElement nestedLink = nestedLinks.get(i);
+                clickElement(nestedLink);
+                String link = driver.getCurrentUrl();
+
                 writer.write(link + "\n");
                 System.out.println("Сохранено: " + link);
-                driver.navigate().back(); // Возврат к списку ссылок
-            } catch (IOException e) {
-                System.out.println("Ошибка записи в файл: " + e.getMessage());
-                e.printStackTrace();
+
+                driver.navigate().back(); // Возврат к предыдущей категории
+                waitForElements(By.className("ctlg-link")); // Ожидание загрузки элементов
+                nestedLinks = driver.findElements(By.className("ctlg-link")); // Обновление списка ссылок
             } catch (StaleElementReferenceException e) {
-                System.out.println("Ссылок не осталось");
+                System.out.println("Ссылка устарела, пробую снова.");
+                i--; // Уменьшение счетчика для повторной обработки того же элемента
+            } catch (IOException e) {
+                System.err.println("Ошибка записи в файл: " + e.getMessage());
             } catch (NoSuchElementException e) {
                 System.out.println("Элемент не найден: " + e.getMessage());
             }
@@ -78,5 +111,9 @@ public class SeleniumScrapper {
         } catch (ElementClickInterceptedException e) {
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
         }
+    }
+
+    private void waitForElements(By by) {
+        wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(by));
     }
 }
