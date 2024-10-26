@@ -9,7 +9,9 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class SeleniumScrapper {
     private static final String ROOT_URL = "https://gifts.ru/";
@@ -17,11 +19,13 @@ public class SeleniumScrapper {
     private WebDriver driver;
     private WebDriverWait wait;
     private BufferedWriter writer;
+    private Set<String> visitedLinks; // Множество для хранения посещенных ссылок
 
     public SeleniumScrapper() {
         System.setProperty("webdriver.chrome.driver", "/usr/local/bin/chromedriver");
         driver = new ChromeDriver();
         wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        visitedLinks = new HashSet<>(); // Инициализация множества
 
         try {
             writer = new BufferedWriter(new FileWriter(LINKS_FILE));
@@ -42,7 +46,7 @@ public class SeleniumScrapper {
     private void processMainCategory(WebElement mainCategory) {
         try {
             String mainCategoryText = mainCategory.getText();
-            System.out.println("Категория: " + mainCategoryText + " сохранена!");
+            System.out.println("Категория: " + mainCategoryText);
             clickElement(mainCategory);
             parseCategoryLinks();
         } catch (IOException e) {
@@ -51,36 +55,63 @@ public class SeleniumScrapper {
     }
 
     private void parseCategoryLinks() throws IOException {
-        List<WebElement> categoryLinks = driver.findElements(By.className("ctlg-link"));
+        while (true) {
+            // Обновляем список ссылок и парсим все, пока не закончатся на текущей странице
+            boolean allLinksParsed = false;
 
-        for (int i = 0; i < categoryLinks.size(); i++) {
-            try {
-                WebElement categoryLink = categoryLinks.get(i);
-                clickElement(categoryLink);
-                String link = driver.getCurrentUrl();
+            while (!allLinksParsed) {
+                List<WebElement> categoryLinks = driver.findElements(By.className("ctlg-link"));
+                allLinksParsed = true; // Предполагаем, что все ссылки будут обработаны на этом этапе
 
-                if (driver.findElements(By.id("j_itemsList")).isEmpty()) {
-                    writer.write(link + "\n");
-                    writer.flush(); // Сразу записать в файл
-                    System.out.println("Сохранено: " + link);
-                } else {
-                    System.out.println("Вложенный переход: " + link);
-                    parseNestedLinks();
+                for (int i = 0; i < categoryLinks.size(); i++) {
+                    try {
+                        WebElement categoryLink = categoryLinks.get(i);
+                        String link = categoryLink.getAttribute("href");
+
+                        if (visitedLinks.contains(link)) {
+                            continue;
+                        }
+
+                        clickElement(categoryLink);
+                        visitedLinks.add(link);
+
+                        if (driver.findElements(By.id("j_itemsList")).isEmpty()) {
+                            writer.write(link + "\n");
+                            writer.flush();
+                            System.out.println("Сохранено: " + link);
+                        } else {
+                            System.out.println("Вложенный переход: " + link);
+                            parseNestedLinks(); // Переход на вложенные ссылки
+                        }
+
+                        driver.navigate().back();
+                        waitForElements(By.className("ctlg-link")); // Ждем, пока все ссылки загрузятся
+                        categoryLinks = driver.findElements(By.className("ctlg-link")); // Обновляем список ссылок
+                        allLinksParsed = false; // Сбрасываем, чтобы снова проверить новые ссылки
+                    } catch (StaleElementReferenceException e) {
+                        System.out.println("Элемент устарел, пробую снова.");
+                        i--;
+                    } catch (IOException e) {
+                        System.err.println("Ошибка записи в файл: " + e.getMessage());
+                    }
                 }
+            }
 
-                driver.navigate().back(); // Возврат к предыдущей категории
-                waitForElements(By.className("ctlg-link")); // Ожидание загрузки элементов
-                categoryLinks = driver.findElements(By.className("ctlg-link")); // Обновление списка ссылок
-            } catch (StaleElementReferenceException e) {
-                System.out.println("Элемент устарел, пробую снова.");
-                i--; // Уменьшение счетчика для повторной обработки того же элемента
-            } catch (IOException e) {
-                System.err.println("Ошибка записи в файл: " + e.getMessage());
-            } catch (NoSuchElementException e) {
-                System.out.println("Элемент не найден: " + e.getMessage());
+            // Проверяем, есть ли кнопка "Показать больше" для перехода на следующую страницу
+            List<WebElement> nextPageButton = driver.findElements(By.id("j_showmore"));
+            if (nextPageButton.isEmpty()) {
+                System.out.println("Больше страниц не найдено.");
+                break;
+            } else {
+                System.out.println("Переходим на следующую страницу");
+                clickElement(nextPageButton.get(0));
+                waitForElements(By.className("ctlg-link")); // Ждем загрузки новых ссылок на новой странице
             }
         }
     }
+
+
+
 
     private void parseNestedLinks() throws IOException {
         List<WebElement> nestedLinks = driver.findElements(By.className("ctlg-link"));
@@ -88,8 +119,15 @@ public class SeleniumScrapper {
         for (int i = 0; i < nestedLinks.size(); i++) {
             try {
                 WebElement nestedLink = nestedLinks.get(i);
+                String link = nestedLink.getAttribute("href"); // Получаем URL из элемента
+
+                // Проверяем, посещали ли мы эту ссылку
+                if (visitedLinks.contains(link)) {
+                    continue; // Пропускаем обработку этой ссылки
+                }
+
                 clickElement(nestedLink);
-                String link = driver.getCurrentUrl();
+                visitedLinks.add(link); // Добавляем ссылку в множество
 
                 writer.write(link + "\n");
                 writer.flush(); // Сразу записать в файл
