@@ -56,12 +56,11 @@ public class SeleniumScrapper {
 
     private void parseCategoryLinks() throws IOException {
         while (true) {
-            // Обновляем список ссылок и парсим все, пока не закончатся на текущей странице
             boolean allLinksParsed = false;
 
             while (!allLinksParsed) {
                 List<WebElement> categoryLinks = driver.findElements(By.className("ctlg-link"));
-                allLinksParsed = true; // Предполагаем, что все ссылки будут обработаны на этом этапе
+                allLinksParsed = true;
 
                 for (int i = 0; i < categoryLinks.size(); i++) {
                     try {
@@ -81,36 +80,44 @@ public class SeleniumScrapper {
                             System.out.println("Сохранено: " + link);
                         } else {
                             System.out.println("Вложенный переход: " + link);
-                            parseNestedLinks(); // Переход на вложенные ссылки
+                            parseNestedLinks();
                         }
 
                         driver.navigate().back();
-                        waitForElements(By.className("ctlg-link")); // Ждем, пока все ссылки загрузятся
-                        categoryLinks = driver.findElements(By.className("ctlg-link")); // Обновляем список ссылок
-                        allLinksParsed = false; // Сбрасываем, чтобы снова проверить новые ссылки
+                        Thread.sleep(1000);  // добавлено для стабилизации
+                        waitForElements(By.className("ctlg-link"));
+                        categoryLinks = driver.findElements(By.className("ctlg-link"));
+                        allLinksParsed = false;
                     } catch (StaleElementReferenceException e) {
                         System.out.println("Элемент устарел, пробую снова.");
                         i--;
                     } catch (IOException e) {
                         System.err.println("Ошибка записи в файл: " + e.getMessage());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        System.err.println("Ожидание прервано: " + e.getMessage());
                     }
                 }
             }
 
-            // Проверяем, есть ли кнопка "Показать больше" для перехода на следующую страницу
+            // Проверяем, есть ли кнопка для подгрузки следующих страниц
             List<WebElement> nextPageButton = driver.findElements(By.id("j_showmore"));
             if (nextPageButton.isEmpty()) {
                 System.out.println("Больше страниц не найдено.");
                 break;
             } else {
-                System.out.println("Переходим на следующую страницу");
+                int linksBefore = driver.findElements(By.className("ctlg-link")).size();
                 clickElement(nextPageButton.get(0));
-                waitForElements(By.className("ctlg-link")); // Ждем загрузки новых ссылок на новой странице
+                System.out.println("Переходим на следующую страницу" + nextPageButton.size());
+
+                // Ждем, пока количество ссылок изменится
+                wait.until(driver -> driver.findElements(By.className("ctlg-link")).size() > linksBefore);
+
+                System.out.println("Загружены новые ссылки.");
+                waitForElements(By.className("ctlg-link"));
             }
         }
     }
-
-
 
 
     private void parseNestedLinks() throws IOException {
