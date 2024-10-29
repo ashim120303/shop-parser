@@ -1,9 +1,14 @@
 package com.shop_parser.jsoap;
 
+import com.luciad.imageio.webp.WebPWriteParam;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +23,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 
 public class JsoupScrapper {
@@ -25,7 +31,7 @@ public class JsoupScrapper {
     private static final String URL = "jdbc:mysql://localhost:3306/shop_db";
     private static final String USER = "shop_user";
     private static final String PASSWORD = "123";
-    private static final String IMAGE_DIRECTORY = "images/упаковка/";
+    private static final String IMAGE_DIRECTORY = "images/ежедневники и блокноты/";
 
     private Connection connection;
 
@@ -109,7 +115,7 @@ public class JsoupScrapper {
             pstmt.setFloat(9, packagingVolume != null ? packagingVolume : 0.0f);
             pstmt.setInt(10, quantityPerPack);
             pstmt.setInt(11, minQuantityPerPack);
-            pstmt.setInt(12, 2);
+            pstmt.setInt(12, 1);
             pstmt.executeUpdate();
 
             ResultSet generatedKeys = pstmt.getGeneratedKeys();
@@ -150,16 +156,28 @@ public class JsoupScrapper {
                 String uniqueImageName = checkAndGetUniqueImageName(productId, originalImageName, existingImageNames);
 
                 try (InputStream in = new URL(imageUrl).openStream()) {
-                    Path filePath = Paths.get(IMAGE_DIRECTORY + uniqueImageName);
+                    // Читаем оригинальное изображение
+                    BufferedImage originalImage = ImageIO.read(in);
 
-                    if (Files.exists(filePath)) {
-                        uniqueImageName = getUniqueFileName(filePath);
-                        filePath = Paths.get(IMAGE_DIRECTORY + uniqueImageName);
+                    // Сохраняем в формате WebP
+                    Path filePath = Paths.get(IMAGE_DIRECTORY + uniqueImageName.replaceAll("\\.(jpg|jpeg|png)$", ".webp"));
+
+                    try (ImageOutputStream output = ImageIO.createImageOutputStream(new File(filePath.toString()))) {
+                        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("webp");
+                        if (writers.hasNext()) {
+                            ImageWriter writer = writers.next();
+                            writer.setOutput(output);
+                            WebPWriteParam param = (WebPWriteParam) writer.getDefaultWriteParam();
+                            param.setCompressionQuality(0.75f); // Настройка качества (0.0f - 1.0f)
+
+                            writer.write(null, new javax.imageio.IIOImage(originalImage, null, null), param);
+                            writer.dispose();
+                            saveImageToDatabase(productId, uniqueImageName.replaceAll("\\.(jpg|jpeg|png)$", ".webp"));
+                            existingImageNames.add(uniqueImageName);
+                        } else {
+                            System.err.println("Нет доступных писателей для формата WebP.");
+                        }
                     }
-
-                    Files.copy(in, filePath, StandardCopyOption.REPLACE_EXISTING);
-                    saveImageToDatabase(productId, uniqueImageName);
-                    existingImageNames.add(uniqueImageName);
                 } catch (IOException e) {
                     System.err.println("Ошибка при скачивании изображения: " + imageUrl + " - " + e.getMessage());
                 }
@@ -203,14 +221,13 @@ public class JsoupScrapper {
             e.printStackTrace();
         }
     }
-
     public void close() {
-        try {
-            if (connection != null && !connection.isClosed()) {
+        if (connection != null) {
+            try {
                 connection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
     }
 }

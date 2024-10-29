@@ -13,7 +13,7 @@ import java.util.List;
 
 public class Main {
 	public static void main(String[] args) {
-		String filePath = "links/2-упаковки.txt"; // путь к файлу с ссылками
+		String filePath = "links/1-ежедневники.txt"; // путь к файлу с ссылками
 
 		try {
 			JsoupScrapper scrapper = new JsoupScrapper();
