@@ -25,7 +25,7 @@ public class JsoupScrapper {
     private static final String URL = "jdbc:mysql://localhost:3306/shop_db";
     private static final String USER = "shop_user";
     private static final String PASSWORD = "123";
-    private static final String IMAGE_DIRECTORY = "images/";
+    private static final String IMAGE_DIRECTORY = "images/упаковка/";
 
     private Connection connection;
 
@@ -34,33 +34,31 @@ public class JsoupScrapper {
         Files.createDirectories(Paths.get(IMAGE_DIRECTORY)); // Создаем директорию для изображений при создании объекта
     }
 
+    public Connection getConnection() {
+        return this.connection;
+    }
+
     public void parseAndSaveProduct(String productUrl) {
         try {
             Document doc = Jsoup.connect(productUrl).get();
             String name = doc.select("h1[itemprop=name]").text();
 
-            // Изменение: получение цены из атрибута data-price
             String price = doc.select("li.j_price").attr("data-price");
-
             String article = doc.select("meta[itemprop=sku]").attr("content");
 
-            // Извлечение характеристик
             String size = extractFeature(doc, "Размеры");
             String material = extractFeature(doc, "Материал");
             Float weight = parseFloat(extractFeature(doc, "Вес брутто (1 шт.)"));
             String packaging = extractFeature(doc, "Транспортная упаковка");
-            Float packagingWeight = parseFloat(extractFeature(doc, "Вес упаковки")); // Добавлено
-            Float packagingVolume = parseFloat(extractFeature(doc, "Объем упаковки")); // Добавлено
+            Float packagingWeight = parseFloat(extractFeature(doc, "Вес упаковки"));
+            Float packagingVolume = parseFloat(extractFeature(doc, "Объем упаковки"));
             int quantityPerPack = parseQuantity(extractFeature(doc, "Количество в упаковке"));
             int minQuantityPerPack = parseQuantity(extractFeature(doc, "Кол-во в мин.упаковке"));
 
-            // Сохранение данных в базу данных
-            int productId = saveProductToDatabase(name, price, article, size, material, weight, packaging, packagingWeight, packagingVolume, quantityPerPack, minQuantityPerPack); // Обновлено
+            int productId = saveProductToDatabase(name, price, article, size, material, weight, packaging, packagingWeight, packagingVolume, quantityPerPack, minQuantityPerPack);
             System.out.println("Attempting to save product: " + name + ", Price: " + price);
 
-            // Скачивание и сохранение изображений
             saveProductImages(doc, productId);
-
             System.out.println("Данные успешно сохранены в базу данных.");
 
         } catch (Exception e) {
@@ -68,7 +66,15 @@ public class JsoupScrapper {
         }
     }
 
-
+    public void markLinkAsProcessed(String link) {
+        String insertSQL = "INSERT INTO processed_links (url) VALUES (?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(insertSQL)) {
+            pstmt.setString(1, link);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 
     private String extractFeature(Document doc, String featureName) {
         Element featureElement = doc.select("li:contains(" + featureName + ")").first();
@@ -89,7 +95,7 @@ public class JsoupScrapper {
     }
 
     private int saveProductToDatabase(String name, String price, String article, String size, String material, Float weight,
-                                      String packaging, Float packagingWeight, Float packagingVolume, int quantityPerPack, int minQuantityPerPack) { // Добавлено minQuantityPerPack
+                                      String packaging, Float packagingWeight, Float packagingVolume, int quantityPerPack, int minQuantityPerPack) {
         String insertProductSQL = "INSERT INTO product (name, price, article, size, material, weight, packaging, packaging_weight, packaging_volume, quantity_per_pack, min_quantity_per_pack, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement pstmt = connection.prepareStatement(insertProductSQL, PreparedStatement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, name);
@@ -102,11 +108,10 @@ public class JsoupScrapper {
             pstmt.setFloat(8, packagingWeight != null ? packagingWeight : 0.0f);
             pstmt.setFloat(9, packagingVolume != null ? packagingVolume : 0.0f);
             pstmt.setInt(10, quantityPerPack);
-            pstmt.setInt(11, minQuantityPerPack); // Добавлено
-            pstmt.setInt(12, 1); // category_id равен 1
+            pstmt.setInt(11, minQuantityPerPack);
+            pstmt.setInt(12, 2);
             pstmt.executeUpdate();
 
-            // Получение сгенерированного productId
             ResultSet generatedKeys = pstmt.getGeneratedKeys();
             if (generatedKeys.next()) {
                 return generatedKeys.getInt(1);
@@ -116,7 +121,6 @@ public class JsoupScrapper {
         }
         return -1;
     }
-
 
     private int parseQuantity(String quantityStr) {
         if (quantityStr.isEmpty()) {
@@ -170,40 +174,23 @@ public class JsoupScrapper {
         int count = 1;
 
         while (Files.exists(filePath)) {
-            fileName = baseName + "(" + count + ")" + extension;
-            filePath = filePath.resolveSibling(fileName);
+            fileName = baseName + "_" + count + extension;
+            filePath = filePath.getParent().resolve(fileName);
             count++;
         }
-
         return fileName;
     }
 
     private String checkAndGetUniqueImageName(int productId, String imageName, Set<String> existingImageNames) {
-        String newImageName = imageName;
-        String baseName = newImageName.substring(0, newImageName.lastIndexOf('.'));
-        String extension = newImageName.substring(newImageName.lastIndexOf('.'));
-        int count = 0;
-
-        while (isImageNameExists(productId, newImageName) || existingImageNames.contains(newImageName)) {
-            count++;
-            newImageName = baseName + "(" + count + ")" + extension;
-        }
-
-        return newImageName;
-    }
-
-    private boolean isImageNameExists(int productId, String imageName) {
-        String query = "SELECT COUNT(*) FROM product_image WHERE product_id = ? AND image_name = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
-            pstmt.setInt(1, productId);
-            pstmt.setString(2, imageName);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                return rs.next() && rs.getInt(1) > 0;
+        String uniqueName = productId + "_" + imageName;
+        if (existingImageNames.contains(uniqueName)) {
+            int count = 1;
+            while (existingImageNames.contains(productId + "_" + count + "_" + imageName)) {
+                count++;
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
+            uniqueName = productId + "_" + count + "_" + imageName;
         }
-        return false;
+        return uniqueName;
     }
 
     private void saveImageToDatabase(int productId, String imageName) {
