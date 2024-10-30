@@ -1,27 +1,42 @@
 package com.shop_parser;
+
 import com.shop_parser.jsoap.JsoupScrapper;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Main {
 	public static void main(String[] args) {
-		String filePath = "links/1-ежедневники.txt"; // путь к файлу с ссылками
+		String filePath = "links/2-упаковки.txt"; // путь к файлу с ссылками
 
 		try {
 			JsoupScrapper scrapper = new JsoupScrapper();
 			List<String> productUrls = loadLinksFromFile(filePath, scrapper.getConnection());
 
+			// Используем ExecutorService для параллельной обработки
+			ExecutorService executor = Executors.newFixedThreadPool(10); // задайте нужное количество потоков
+
 			for (String productUrl : productUrls) {
-				scrapper.parseAndSaveProduct(productUrl);
-				scrapper.markLinkAsProcessed(productUrl); // отмечаем ссылку как обработанную
+				executor.submit(() -> {
+					try {
+						scrapper.parseAndSaveProduct(productUrl);
+						scrapper.markLinkAsProcessed(productUrl); // отмечаем ссылку как обработанную
+					} catch (Exception e) {
+						System.err.println("Ошибка при обработке URL: " + productUrl + " - " + e.getMessage());
+					}
+				});
+			}
+
+			executor.shutdown(); // Ожидаем завершения всех задач
+			while (!executor.isTerminated()) {
+				// Ждем завершения всех задач
 			}
 
 			scrapper.close(); // Закрытие соединения после выполнения
@@ -48,9 +63,9 @@ public class Main {
 
 	private static boolean isLinkProcessed(Connection connection, String link) {
 		String query = "SELECT COUNT(*) FROM processed_links WHERE url = ?";
-		try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+		try (var pstmt = connection.prepareStatement(query)) {
 			pstmt.setString(1, link);
-			try (ResultSet rs = pstmt.executeQuery()) {
+			try (var rs = pstmt.executeQuery()) {
 				return rs.next() && rs.getInt(1) > 0;
 			}
 		} catch (SQLException e) {

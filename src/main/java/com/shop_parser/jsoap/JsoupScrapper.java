@@ -31,7 +31,7 @@ public class JsoupScrapper {
     private static final String URL = "jdbc:mysql://localhost:3306/shop_db";
     private static final String USER = "shop_user";
     private static final String PASSWORD = "123";
-    private static final String IMAGE_DIRECTORY = "images/ежедневники и блокноты/";
+    private static final String IMAGE_DIRECTORY = "images/упаковки/";
 
     private Connection connection;
 
@@ -115,7 +115,7 @@ public class JsoupScrapper {
             pstmt.setFloat(9, packagingVolume != null ? packagingVolume : 0.0f);
             pstmt.setInt(10, quantityPerPack);
             pstmt.setInt(11, minQuantityPerPack);
-            pstmt.setInt(12, 1);
+            pstmt.setInt(12, 2);
             pstmt.executeUpdate();
 
             ResultSet generatedKeys = pstmt.getGeneratedKeys();
